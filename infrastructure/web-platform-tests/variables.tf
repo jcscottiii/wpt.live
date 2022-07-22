@@ -1,48 +1,48 @@
 variable "region" {
-  type = "string"
+  type = string
 }
 
 variable "zone" {
-  type = "string"
+  type = string
 }
 
 variable "name" {
-  type = "string"
+  type = string
 }
 
 variable "network_name" {
-  type = "string"
+  type = string
 }
 
 variable "subnetwork_name" {
-  type = "string"
+  type = string
 }
 
 variable "host_zone_name" {
-  type        = "string"
+  type        = string
   description = "The primary host to be used by the web-platform-tests server"
 }
 
 variable "host_name" {
-  type = "string"
+  type = string
 }
 
 variable "alt_host_zone_name" {
-  type        = "string"
+  type        = string
   description = "The secondary host to be used by the web-platform-tests server"
 }
 
 variable "alt_host_name" {
-  type = "string"
+  type = string
 }
 
 variable "wpt_server_image" {
-  type        = "string"
+  type        = string
   description = "The address of a Docker image that runs the web-platform-tests server"
 }
 
 variable "cert_renewer_image" {
-  type        = "string"
+  type        = string
   description = "The address of of a Docker image that renews TLS certificates for the system"
 }
 
@@ -50,3 +50,4 @@ variable "wpt_server_disk_size" {
   description = "The size of the disk in gigabytes. If not specified, it will inherit the size of its base image."
   default     = 0
 }
+
