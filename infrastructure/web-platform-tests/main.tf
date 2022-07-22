@@ -17,7 +17,8 @@ locals {
 }
 
 module "wpt-server-container" {
-  source = "github.com/terraform-google-modules/terraform-google-container-vm?ref=v0.3.0"
+  source = "terraform-google-modules/container-vm/google"
+  version = "2.0.0"
 
   container = {
     image = var.wpt_server_image
@@ -41,7 +42,8 @@ module "wpt-server-container" {
 }
 
 module "cert-renewer-container" {
-  source = "github.com/terraform-google-modules/terraform-google-container-vm?ref=v0.3.0"
+  source = "terraform-google-modules/container-vm/google"
+  version = "2.0.0"
 
   container = {
     image = var.cert_renewer_image
