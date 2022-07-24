@@ -131,7 +131,7 @@ resource "google_compute_instance_group_manager" "wpt_servers" {
   }
 
   auto_healing_policies {
-    health_check      = google_compute_health_check.wpt_health_check.id
+    health_check      = google_compute_health_check.wpt_health_check.self_link
     initial_delay_sec = 30
   }
 }
@@ -150,7 +150,7 @@ resource "google_compute_firewall" "wpt-servers-default-ssh" {
 }
 
 resource "google_compute_instance_template" "wpt_server" {
-  name_prefix        = "default"
+  name_prefix        = "default-"
   description = "This template is used to create wpt-server instances."
 
   tags = ["allow-ssh", "${var.name}-allow"]
@@ -168,12 +168,14 @@ resource "google_compute_instance_template" "wpt_server" {
   # https://github.com/GoogleCloudPlatform/konlet/issues/56
   labels = {
     "container-vm" = module.wpt-server-container.vm_container_label
-    "google-logging-enabled" = "true"
   }
 
   network_interface {
     network = "${var.network_name}"
     subnetwork         = "${var.subnetwork_name}"
+    access_config {
+      network_tier = "PREMIUM"
+    }
   }
 
   can_ip_forward       = false
@@ -200,8 +202,10 @@ resource "google_compute_instance_template" "wpt_server" {
   }
 
   metadata = {
+    "gce-container-declaration" = module.wpt-server-container.metadata_value
     "startup-script" = ""
     "tf_depends_id" = ""
+    "google-logging-enabled" = "true"
   }
 
   lifecycle {
@@ -220,13 +224,15 @@ resource "google_compute_instance_template" "cert_renewers" {
 
   labels = {
     "container-vm" = module.cert-renewer-container.vm_container_label
-    "google-logging-enabled" = "true"
   }
 
   network_interface {
     network            = "${var.network_name}"
     subnetwork         = "${var.subnetwork_name}"
     network_ip         = ""
+    access_config {
+      network_tier = "PREMIUM"
+    }
   }
 
   can_ip_forward = false
@@ -246,13 +252,16 @@ resource "google_compute_instance_template" "cert_renewers" {
   }
 
   metadata = {
+    "gce-container-declaration" = module.cert-renewer-container.metadata_value
     "startup-script" = ""
     "tf_depends_id" = ""
+    "google-logging-enabled" = "true"
   }
 
   scheduling {
     preemptible       = false
     automatic_restart = true
+    on_host_maintenance = "MIGRATE"
   }
 
   lifecycle {
@@ -268,14 +277,14 @@ resource "google_compute_instance_group_manager" "cert_renewers" {
   base_instance_name = "${var.name}-cert-renewers"
 
   version {
-    name              = "${var.name}-cert-renewers-default"
     instance_template = "${google_compute_instance_template.cert_renewers.self_link}"
   }
 
   zone = "${var.zone}"
 
   update_policy {
-    type = local.update_policy.type
+    # The type is different from wpt servers's update policy.
+    type = "OPPORTUNISTIC"
     minimal_action = local.update_policy.minimal_action
     max_unavailable_fixed  = local.update_policy.max_unavailable_fixed
   }
