@@ -10,12 +10,6 @@ provider "google" {
   credentials = file("google-cloud-platform-credentials.json")
 }
 
-provider "google-beta" {
-  project     = local.project_name
-  region      = local.region
-  credentials = file("google-cloud-platform-credentials.json")
-}
-
 resource "google_compute_network" "default" {
   name                    = "wpt-live-network"
   auto_create_subnetworks = "false"
@@ -43,10 +37,6 @@ module "cert-renewer-image" {
 
 module "wpt-live" {
   source = "./infrastructure/web-platform-tests"
-
-  providers = {
-    google-beta = google-beta
-  }
 
   name               = "wpt-tot"
   network_name       = google_compute_network.default.name

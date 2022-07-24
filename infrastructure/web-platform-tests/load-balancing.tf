@@ -7,15 +7,7 @@
 locals {
   lb_name = "${var.name}-load-balancing"
 
-  forwarded_ports = [
-    module.wpt-servers.service_port_1,
-    module.wpt-servers.service_port_2,
-    module.wpt-servers.service_port_3,
-    module.wpt-servers.service_port_4,
-    module.wpt-servers.service_port_5,
-    module.wpt-servers.service_port_6,
-    module.wpt-servers.service_port_7,
-  ]
+  forwarded_ports = [for wpt_server_port in var.wpt_server_ports: wpt_server_port.port]
 }
 
 resource "google_compute_forwarding_rule" "default" {
@@ -44,7 +36,7 @@ resource "google_compute_http_health_check" "default" {
   # request logs.
   request_path = "/?gcp-health-check-load-balancing"
 
-  port = module.wpt-servers.service_port_1
+  port = var.wpt_server_ports[0].port
 }
 
 resource "google_compute_firewall" "default-lb-fw" {
@@ -65,6 +57,6 @@ resource "google_compute_firewall" "default-lb-fw" {
   # If the expression in the following list itself returns a list, remove the
   # brackets to avoid interpretation as a list of lists. If the expression
   # returns a single list item then leave it as-is and remove this TODO comment.
-  target_tags = [module.wpt-servers.target_tags]
+  target_tags = ["${var.name}-allow"]
 }
 

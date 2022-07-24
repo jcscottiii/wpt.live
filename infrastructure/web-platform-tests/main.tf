@@ -1,24 +1,19 @@
-# https://github.com/hashicorp/terraform/issues/17399
-provider "google-beta" {
-}
-
 locals {
   bucket_name = "${var.name}-certificates"
 
-  update_policy = [
-    {
+  update_policy = {
       type           = "PROACTIVE"
       minimal_action = "RESTART"
       # > maxUnavailable must be greater than 0 when minimal action is set to
       # > RESTART
       max_unavailable_fixed = 1
-    },
-  ]
+  }
+
 }
 
 module "wpt-server-container" {
   source = "terraform-google-modules/container-vm/google"
-  version = "2.0.0"
+  version = "~> 2.0"
 
   container = {
     image = var.wpt_server_image
@@ -43,7 +38,7 @@ module "wpt-server-container" {
 
 module "cert-renewer-container" {
   source = "terraform-google-modules/container-vm/google"
-  version = "2.0.0"
+  version = "~> 2.0"
 
   container = {
     image = var.cert_renewer_image
@@ -66,18 +61,86 @@ module "cert-renewer-container" {
   restart_policy = "Always"
 }
 
-module "wpt-servers" {
-  source = "github.com/ecosystem-infra/terraform-google-multi-port-managed-instance-group?ref=a40a3b9f3"
+resource "google_compute_health_check" "wpt_health_check" {
+  name    = "${var.name}-wpt-servers"
 
-  providers = {
-    google-beta = google-beta
+  check_interval_sec  = 10
+  timeout_sec         = 10
+  healthy_threshold   = 3
+  unhealthy_threshold = 6
+
+  https_health_check {
+    port         = "443"
+  # A query parameter is used to distinguish the health check in the server's
+  # request logs.
+    request_path = "/?gcp-health-check"
+  }
+}
+
+resource "google_compute_instance_group_manager" "wpt_servers" {
+  name = "${var.name}-wpt-servers"
+  zone = "${var.zone}"
+  description        = "compute VM Instance Group"
+  wait_for_instances = false
+  base_instance_name = "${var.name}-wpt-servers"
+  version {
+    name              = "${var.name}-wpt-servers-default"
+    instance_template = google_compute_instance_template.wpt_server.id
+  }
+  update_policy {
+    type = local.update_policy.type
+    minimal_action = local.update_policy.minimal_action
+    max_unavailable_fixed  = local.update_policy.max_unavailable_fixed
+  }
+  target_pools = [google_compute_target_pool.default.self_link]
+  target_size  = 2
+
+  named_port {
+    name = "http-primary"
+    port = 80
   }
 
-  region        = var.region
-  zone          = var.zone
-  name          = "${var.name}-wpt-servers"
-  size          = 2
-  compute_image = module.wpt-server-container.source_image
+  named_port {
+    name = "http-secondary"
+    port = 8000
+  }
+
+  named_port {
+    name = "https"
+    port = 443
+  }
+
+  named_port {
+    name = "http2"
+    port = 8001
+  }
+
+  named_port {
+    name = "websocket"
+    port = 8002
+  }
+
+  named_port {
+    name = "websocket-secure"
+    port = 8003
+  }
+
+  named_port {
+    name = "https-secondary"
+    port = 8443
+  }
+
+  auto_healing_policies {
+    health_check      = google_compute_health_check.wpt_health_check.id
+    initial_delay_sec = 30
+  }
+}
+
+resource "google_compute_instance_template" "wpt_server" {
+  name        = "wpt-server-template"
+  description = "This template is used to create wpt-server instances."
+
+  tags = ["allow-ssh", "${var.name}-allow"]
 
   # As of 2020-06-17, we were running into OOM issues with the 1.7 GB
   # "g1-small" instance[1]. This was suspected to be due to 'git gc' needing
@@ -86,92 +149,137 @@ module "wpt-servers" {
   # [1] https://github.com/web-platform-tests/wpt.live/issues/30
   machine_type = "e2-medium"
 
-  instance_labels = {
-    module.wpt-server-container.vm_container_label_key = module.wpt-server-container.vm_container_label
-  }
-
   # The "google-logging-enabled" metadata is undocumented, but it is apparently
   # necessary to enable the capture of logs from the Docker image.
   #
   # https://github.com/GoogleCloudPlatform/konlet/issues/56
-  metadata = {
-    module.wpt-server-container.metadata_key = module.wpt-server-container.metadata_value
-    "google-logging-enabled"                 = "true"
+  labels = {
+    "container-vm" = module.wpt-server-container.vm_container_label
+    "google-logging-enabled" = "true"
   }
 
-  service_port_1      = 80
-  service_port_1_name = "http-primary"
-  service_port_2      = 8000
-  service_port_2_name = "http-secondary"
-  service_port_3      = 443
-  service_port_3_name = "https"
-  service_port_4      = 8001
-  service_port_4_name = "http2"
-  service_port_5      = 8002
-  service_port_5_name = "websocket"
-  service_port_6      = 8003
-  service_port_6_name = "websocket-secure"
-  service_port_7      = 8443
-  service_port_7_name = "https-secondary"
-  ssh_fw_rule         = true
-  https_health_check  = true
+  network_interface {
+    network = "${var.network_name}"
+    subnetwork         = "${var.subnetwork_name}"
+  }
 
-  # A query parameter is used to distinguish the health check in the server's
-  # request logs.
-  hc_path = "/?gcp-health-check"
+  can_ip_forward       = false
 
-  hc_port                = 443
-  hc_interval            = 10
-  hc_healthy_threshold   = 3
-  hc_unhealthy_threshold = 6
-  target_pools           = [google_compute_target_pool.default.self_link]
-  target_tags            = ["${var.name}-allow"]
-  network                = var.network_name
-  subnetwork             = var.subnetwork_name
-  service_account_scopes = ["storage-ro", "logging-write"]
-  update_policy          = local.update_policy
-  disk_size_gb           = var.wpt_server_disk_size
+  // Create a new boot disk from an image
+  disk {
+    auto_delete       = true
+    boot              = true
+    source_image      = "${module.wpt-server-container.source_image}"
+    type =   "PERSISTENT"
+    disk_type = "pd-ssd"
+    disk_size_gb = var.wpt_server_disk_size
+    mode = "READ_WRITE"
+  }
+
+  service_account {
+    email  = "default"
+    scopes = ["storage-ro", "logging-write"]
+  }
+
+  scheduling {
+    automatic_restart   = true
+    on_host_maintenance = "MIGRATE"
+  }
+
+  metadata = {
+    "startup-script" = ""
+    "tf_depends_id" = ""
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-module "cert-renewers" {
-  # https://github.com/GoogleCloudPlatform/terraform-google-managed-instance-group/pull/39
-  source = "github.com/dcaba/terraform-google-managed-instance-group?ref=340409c"
+resource "google_compute_instance_template" "cert_renewers" {
+  name_prefix = "default-"
 
-  providers = {
-    google-beta = google-beta
+  machine_type = "f1-micro"
+
+  region = "${var.region}"
+
+  tags = ["allow-ssh", "${var.name}-allow"]
+
+  labels = {
+    "container-vm" = module.cert-renewer-container.vm_container_label
+    "google-logging-enabled" = "true"
   }
 
-  region        = var.region
-  zone          = var.zone
-  name          = "${var.name}-cert-renewers"
-  size          = 1
-  compute_image = module.cert-renewer-container.source_image
-
-  instance_labels = {
-    module.cert-renewer-container.vm_container_label_key = module.cert-renewer-container.vm_container_label
+  network_interface {
+    network            = "${var.network_name}"
+    subnetwork         = "${var.subnetwork_name}"
+    network_ip         = ""
   }
 
-  # The "google-logging-enabled" metadata is undocumented, but it is apparently
-  # necessary to enable the capture of logs from the Docker image.
-  #
-  # https://github.com/GoogleCloudPlatform/konlet/issues/56
+  can_ip_forward = false
+
+  disk {
+    auto_delete  = true
+    boot         = true
+    source_image = "${module.cert-renewer-container.source_image}"
+    type         = "PERSISTENT"
+    disk_type    = "pd-ssd"
+    mode         = "READ-WRITE"
+  }
+
+  service_account {
+    email  = "default"
+    scopes = ["cloud-platform"]
+  }
+
   metadata = {
-    module.cert-renewer-container.metadata_key = module.cert-renewer-container.metadata_value
-    "google-logging-enabled"                   = "true"
+    "startup-script" = ""
+    "tf_depends_id" = ""
   }
 
-  service_port           = 8004
-  service_port_name      = "http"
-  ssh_fw_rule            = false
-  http_health_check      = false
-  target_tags            = ["${var.name}-allow"]
-  network                = var.network_name
-  subnetwork             = var.subnetwork_name
-  service_account_scopes = ["cloud-platform"]
-  update_policy          = local.update_policy
+  scheduling {
+    preemptible       = false
+    automatic_restart = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "google_compute_instance_group_manager" "cert_renewers" {
+  name               = "${var.name}-cert-renewers"
+  description        = "compute VM Instance Group"
+  wait_for_instances = false
+
+  base_instance_name = "${var.name}-cert-renewers"
+
+  version {
+    name              = "${var.name}-cert-renewers-default"
+    instance_template = "${google_compute_instance_template.cert_renewers.self_link}"
+  }
+
+  zone = "${var.zone}"
+
+  update_policy {
+    type = local.update_policy.type
+    minimal_action = local.update_policy.minimal_action
+    max_unavailable_fixed  = local.update_policy.max_unavailable_fixed
+  }
+
+  target_pools = []
+
+  target_size = 1
+
+  named_port {
+    name = "http"
+    port = 8004
+  }
+
 }
 
 resource "google_storage_bucket" "certificates" {
   name = local.bucket_name
+  location = "US"
 }
 

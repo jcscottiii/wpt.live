@@ -51,3 +51,39 @@ variable "wpt_server_disk_size" {
   default     = 0
 }
 
+variable "wpt_server_ports" {
+  type = list(object({
+    name = string
+    port = number
+  }))
+  default = [
+    {
+      name = "http-primary",
+      port= 80
+    },
+    {
+      name = "http-secondary",
+      port= 8000
+    },
+    {
+      name = "https",
+      port= 443
+    },
+    {
+      name = "http2",
+      port= 8001
+    },
+    {
+      name = "websocket",
+      port= 8002
+    },
+    {
+      name = "websocket-secure",
+      port= 8003
+    },
+    {
+      name = "https-secondary",
+      port= 8443
+    },
+  ]
+}
