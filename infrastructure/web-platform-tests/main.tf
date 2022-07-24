@@ -237,7 +237,7 @@ resource "google_compute_instance_template" "cert_renewers" {
     source_image = "${module.cert-renewer-container.source_image}"
     type         = "PERSISTENT"
     disk_type    = "pd-ssd"
-    mode         = "READ-WRITE"
+    mode         = "READ_WRITE"
   }
 
   service_account {
