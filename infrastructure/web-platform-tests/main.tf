@@ -2,17 +2,17 @@ locals {
   bucket_name = "${var.name}-certificates"
 
   update_policy = {
-      type           = "PROACTIVE"
-      minimal_action = "RESTART"
-      # > maxUnavailable must be greater than 0 when minimal action is set to
-      # > RESTART
-      max_unavailable_fixed = 1
+    type           = "PROACTIVE"
+    minimal_action = "RESTART"
+    # > maxUnavailable must be greater than 0 when minimal action is set to
+    # > RESTART
+    max_unavailable_fixed = 1
   }
 
 }
 
 module "wpt-server-container" {
-  source = "terraform-google-modules/container-vm/google"
+  source  = "terraform-google-modules/container-vm/google"
   version = "~> 2.0"
 
   container = {
@@ -37,7 +37,7 @@ module "wpt-server-container" {
 }
 
 module "cert-renewer-container" {
-  source = "terraform-google-modules/container-vm/google"
+  source  = "terraform-google-modules/container-vm/google"
   version = "~> 2.0"
 
   container = {
@@ -62,7 +62,7 @@ module "cert-renewer-container" {
 }
 
 resource "google_compute_health_check" "wpt_health_check" {
-  name    = "${var.name}-wpt-servers"
+  name = "${var.name}-wpt-servers"
 
   check_interval_sec  = 10
   timeout_sec         = 10
@@ -70,16 +70,16 @@ resource "google_compute_health_check" "wpt_health_check" {
   unhealthy_threshold = 6
 
   https_health_check {
-    port         = "443"
-  # A query parameter is used to distinguish the health check in the server's
-  # request logs.
+    port = "443"
+    # A query parameter is used to distinguish the health check in the server's
+    # request logs.
     request_path = "/?gcp-health-check"
   }
 }
 
 resource "google_compute_instance_group_manager" "wpt_servers" {
-  name = "${var.name}-wpt-servers"
-  zone = "${var.zone}"
+  name               = "${var.name}-wpt-servers"
+  zone               = var.zone
   description        = "compute VM Instance Group"
   wait_for_instances = false
   base_instance_name = "${var.name}-wpt-servers"
@@ -88,9 +88,9 @@ resource "google_compute_instance_group_manager" "wpt_servers" {
     instance_template = google_compute_instance_template.wpt_server.id
   }
   update_policy {
-    type = local.update_policy.type
-    minimal_action = local.update_policy.minimal_action
-    max_unavailable_fixed  = local.update_policy.max_unavailable_fixed
+    type                  = local.update_policy.type
+    minimal_action        = local.update_policy.minimal_action
+    max_unavailable_fixed = local.update_policy.max_unavailable_fixed
   }
   target_pools = [google_compute_target_pool.default.self_link]
   target_size  = 2
@@ -138,7 +138,7 @@ resource "google_compute_instance_group_manager" "wpt_servers" {
 
 resource "google_compute_firewall" "wpt-servers-default-ssh" {
   name    = "${var.name}-wpt-servers-vm-ssh"
-  network = "${var.network_name}"
+  network = var.network_name
 
   allow {
     protocol = "tcp"
@@ -150,7 +150,7 @@ resource "google_compute_firewall" "wpt-servers-default-ssh" {
 }
 
 resource "google_compute_instance_template" "wpt_server" {
-  name_prefix        = "default-"
+  name_prefix = "default-"
   description = "This template is used to create wpt-server instances."
 
   tags = ["allow-ssh", "${var.name}-allow"]
@@ -171,24 +171,24 @@ resource "google_compute_instance_template" "wpt_server" {
   }
 
   network_interface {
-    network = "${var.network_name}"
-    subnetwork         = "${var.subnetwork_name}"
+    network    = var.network_name
+    subnetwork = var.subnetwork_name
     access_config {
       network_tier = "PREMIUM"
     }
   }
 
-  can_ip_forward       = false
+  can_ip_forward = false
 
   // Create a new boot disk from an image
   disk {
-    auto_delete       = true
-    boot              = true
-    source_image      = "${module.wpt-server-container.source_image}"
-    type =   "PERSISTENT"
-    disk_type = "pd-ssd"
+    auto_delete  = true
+    boot         = true
+    source_image = module.wpt-server-container.source_image
+    type         = "PERSISTENT"
+    disk_type    = "pd-ssd"
     disk_size_gb = var.wpt_server_disk_size
-    mode = "READ_WRITE"
+    mode         = "READ_WRITE"
   }
 
   service_account {
@@ -203,9 +203,9 @@ resource "google_compute_instance_template" "wpt_server" {
 
   metadata = {
     "gce-container-declaration" = module.wpt-server-container.metadata_value
-    "startup-script" = ""
-    "tf_depends_id" = ""
-    "google-logging-enabled" = "true"
+    "startup-script"            = ""
+    "tf_depends_id"             = ""
+    "google-logging-enabled"    = "true"
   }
 
   lifecycle {
@@ -218,7 +218,7 @@ resource "google_compute_instance_template" "cert_renewers" {
 
   machine_type = "f1-micro"
 
-  region = "${var.region}"
+  region = var.region
 
   tags = ["allow-ssh", "${var.name}-allow"]
 
@@ -227,9 +227,9 @@ resource "google_compute_instance_template" "cert_renewers" {
   }
 
   network_interface {
-    network            = "${var.network_name}"
-    subnetwork         = "${var.subnetwork_name}"
-    network_ip         = ""
+    network    = var.network_name
+    subnetwork = var.subnetwork_name
+    network_ip = ""
     access_config {
       network_tier = "PREMIUM"
     }
@@ -240,7 +240,7 @@ resource "google_compute_instance_template" "cert_renewers" {
   disk {
     auto_delete  = true
     boot         = true
-    source_image = "${module.cert-renewer-container.source_image}"
+    source_image = module.cert-renewer-container.source_image
     type         = "PERSISTENT"
     disk_type    = "pd-ssd"
     mode         = "READ_WRITE"
@@ -253,14 +253,14 @@ resource "google_compute_instance_template" "cert_renewers" {
 
   metadata = {
     "gce-container-declaration" = module.cert-renewer-container.metadata_value
-    "startup-script" = ""
-    "tf_depends_id" = ""
-    "google-logging-enabled" = "true"
+    "startup-script"            = ""
+    "tf_depends_id"             = ""
+    "google-logging-enabled"    = "true"
   }
 
   scheduling {
-    preemptible       = false
-    automatic_restart = true
+    preemptible         = false
+    automatic_restart   = true
     on_host_maintenance = "MIGRATE"
   }
 
@@ -277,16 +277,16 @@ resource "google_compute_instance_group_manager" "cert_renewers" {
   base_instance_name = "${var.name}-cert-renewers"
 
   version {
-    instance_template = "${google_compute_instance_template.cert_renewers.self_link}"
+    instance_template = google_compute_instance_template.cert_renewers.self_link
   }
 
-  zone = "${var.zone}"
+  zone = var.zone
 
   update_policy {
     # The type is different from wpt servers's update policy.
-    type = "OPPORTUNISTIC"
-    minimal_action = local.update_policy.minimal_action
-    max_unavailable_fixed  = local.update_policy.max_unavailable_fixed
+    type                  = "OPPORTUNISTIC"
+    minimal_action        = local.update_policy.minimal_action
+    max_unavailable_fixed = local.update_policy.max_unavailable_fixed
   }
 
   target_pools = []
@@ -301,7 +301,7 @@ resource "google_compute_instance_group_manager" "cert_renewers" {
 }
 
 resource "google_storage_bucket" "certificates" {
-  name = local.bucket_name
+  name     = local.bucket_name
   location = "US"
 }
 
