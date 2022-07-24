@@ -136,8 +136,21 @@ resource "google_compute_instance_group_manager" "wpt_servers" {
   }
 }
 
+resource "google_compute_firewall" "wpt-servers-default-ssh" {
+  name    = "${var.name}-wpt-servers-vm-ssh"
+  network = "${var.network_name}"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["allow-ssh"]
+}
+
 resource "google_compute_instance_template" "wpt_server" {
-  name        = "wpt-server-template"
+  name_prefix        = "default"
   description = "This template is used to create wpt-server instances."
 
   tags = ["allow-ssh", "${var.name}-allow"]
