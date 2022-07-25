@@ -266,11 +266,13 @@ resource "google_compute_instance_group_manager" "cert_renewers" {
 
   target_size = 1
 
-  named_port {
-    name = "http"
-    port = 8004
+  dynamic "named_port" {
+    for_each = var.cert_renewer_ports
+    content {
+      name = named_port.value["name"]
+      port = named_port.value["port"]
+    }
   }
-
 }
 
 resource "google_storage_bucket" "certificates" {

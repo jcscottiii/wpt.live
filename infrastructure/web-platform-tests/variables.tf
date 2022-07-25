@@ -88,3 +88,18 @@ variable "wpt_server_ports" {
     },
   ]
 }
+
+
+variable "cert_renewer_ports" {
+  type = list(object({
+    name = string
+    port = number
+  }))
+  description = "Mapping of name to port. Ports are used for the cert renewer."
+  default = [
+    {
+      name = "http",
+      port = 8004
+    }
+  ]
+}
