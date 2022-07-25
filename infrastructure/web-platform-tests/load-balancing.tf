@@ -49,5 +49,5 @@ resource "google_compute_firewall" "default-lb-fw" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags = ["${var.name}-allow"]
+  target_tags   = ["${var.name}-allow"]
 }

@@ -1,8 +1,8 @@
 # Contains the configurations for the Compute Engine section of Google Cloud
 # These configurations come from modules that are now archived:
-# - github.com/dcaba/terraform-google-managed-instance-group
-# - github.com/ecosystem-infra/terraform-google-multi-port-managed-instance-group
-# This serves
+# - Cert Renewer used: github.com/dcaba/terraform-google-managed-instance-group
+# - WPT Server used: github.com/ecosystem-infra/terraform-google-multi-port-managed-instance-group
+# Most hardcoded defaults come from those aforementioned modules.
 
 ########################################
 # WPT Server
@@ -68,6 +68,8 @@ resource "google_compute_firewall" "wpt-server-mig-health-check" {
     ports = [var.wpt_server_ports[2].port]
   }
 
+  # This range comes from this module that was used previously:
+  # https://github.com/Ecosystem-Infra/terraform-google-multi-port-managed-instance-group/blob/master/main.tf#L347
   source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
   target_tags   = ["${var.name}-allow"]
 }
@@ -103,7 +105,7 @@ resource "google_compute_instance_template" "wpt_server" {
   #
   # https://github.com/GoogleCloudPlatform/konlet/issues/56
   labels = {
-    "container-vm" = module.wpt-server-container.vm_container_label
+    "${module.wpt-server-container.vm_container_label_key}" = module.wpt-server-container.vm_container_label
   }
 
   network_interface {
@@ -137,6 +139,8 @@ resource "google_compute_instance_template" "wpt_server" {
     on_host_maintenance = "MIGRATE"
   }
 
+  # startup-script and tf_depends_id comes from the module previously used for wpt-server. (see link at top)
+  # TODO: evaluate if those two should be removed.
   metadata = {
     "gce-container-declaration" = module.wpt-server-container.metadata_value
     "startup-script"            = ""
@@ -165,7 +169,7 @@ resource "google_compute_instance_template" "cert_renewers" {
   tags = ["allow-ssh", "${var.name}-allow"]
 
   labels = {
-    "container-vm" = module.cert-renewer-container.vm_container_label
+    "${module.cert-renewer-container.vm_container_label_key}" = module.cert-renewer-container.vm_container_label
   }
 
   network_interface {
@@ -193,6 +197,8 @@ resource "google_compute_instance_template" "cert_renewers" {
     scopes = ["cloud-platform"]
   }
 
+  # startup-script and tf_depends_id comes from the module previously used for cert renewer. (see link at top)
+  # TODO: evaluate if those two should be removed.
   metadata = {
     "gce-container-declaration" = module.cert-renewer-container.metadata_value
     "startup-script"            = ""
@@ -226,6 +232,7 @@ resource "google_compute_instance_group_manager" "cert_renewers" {
 
   update_policy {
     # The type is different from wpt servers's update policy.
+    # TODO: Evaluate why
     type                  = "OPPORTUNISTIC"
     minimal_action        = local.update_policy.minimal_action
     max_unavailable_fixed = local.update_policy.max_unavailable_fixed
