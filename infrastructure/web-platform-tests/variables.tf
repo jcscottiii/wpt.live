@@ -56,6 +56,7 @@ variable "wpt_server_ports" {
     name = string
     port = number
   }))
+  description = "Mapping of name to port. Ports are used for the wpt server."
   default = [
     {
       name = "http-primary",

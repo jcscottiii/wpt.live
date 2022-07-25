@@ -95,39 +95,12 @@ resource "google_compute_instance_group_manager" "wpt_servers" {
   target_pools = [google_compute_target_pool.default.self_link]
   target_size  = 2
 
-  named_port {
-    name = "http-primary"
-    port = 80
-  }
-
-  named_port {
-    name = "http-secondary"
-    port = 8000
-  }
-
-  named_port {
-    name = "https"
-    port = 443
-  }
-
-  named_port {
-    name = "http2"
-    port = 8001
-  }
-
-  named_port {
-    name = "websocket"
-    port = 8002
-  }
-
-  named_port {
-    name = "websocket-secure"
-    port = 8003
-  }
-
-  named_port {
-    name = "https-secondary"
-    port = 8443
+  dynamic "named_port" {
+    for_each = var.wpt_server_ports
+    content {
+      name = named_port.value["name"]
+      port = named_port.value["port"]
+    }
   }
 
   auto_healing_policies {
