@@ -58,6 +58,20 @@ resource "google_compute_instance_group_manager" "wpt_servers" {
   }
 }
 
+resource "google_compute_firewall" "wpt-server-mig-health-check" {
+  name    = "${var.name}-wpt-servers-vm-hc"
+  network = var.network_name
+
+  allow {
+    protocol = "tcp"
+    # https port
+    ports = [var.wpt_server_ports[2].port]
+  }
+
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
+  target_tags   = ["${var.name}-allow"]
+}
+
 resource "google_compute_firewall" "wpt-servers-default-ssh" {
   name    = "${var.name}-wpt-servers-vm-ssh"
   network = var.network_name

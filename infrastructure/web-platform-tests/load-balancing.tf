@@ -51,18 +51,3 @@ resource "google_compute_firewall" "default-lb-fw" {
   source_ranges = ["0.0.0.0/0"]
   target_tags = ["${var.name}-allow"]
 }
-
-
-resource "google_compute_firewall" "wpt-server-mig-health-check" {
-  name    = "${var.name}-wpt-servers-vm-hc"
-  network = var.network_name
-
-  allow {
-    protocol = "tcp"
-    # https port
-    ports = [var.wpt_server_ports[2].port]
-  }
-
-  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
-  target_tags   = ["${var.name}-allow"]
-}
